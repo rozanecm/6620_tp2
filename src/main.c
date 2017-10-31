@@ -31,8 +31,8 @@ struct cache_block cache[VIAS][CACHE_SIZE][BLOCK_SIZE];
 char main_memory[MAIN_MEMORY_SIZE];
 
 /* statistics variables */
-unsigned int total_accesses = 0;
-unsigned int missed_accesses = 0;
+float total_accesses = 0;
+float missed_accesses = 0;
 double miss_rate;
 
 void init(){
@@ -53,12 +53,12 @@ void init(){
 
 void calculate_offset_index_tag(int address, int *offset, int *index, int *tag){
 	/* offset */
-	*offset = address << (INSTRUCTION_SIZE - OFFSET);
-	*offset = *offset >> (INSTRUCTION_SIZE - OFFSET);
+	*offset = address << (sizeof(address) - OFFSET);
+	*offset = *offset >> (sizeof(address) - OFFSET);
 
 	/* index */
-	*index = address << TAG;
-	*index = *index >> (OFFSET + TAG);
+	*index = address << (sizeof(address) - INSTRUCTION_SIZE);
+	*index = *index >> (sizeof(address) - INSTRUCTION_SIZE + OFFSET + TAG);
 
 	/* tag */
 	*tag = address >> (INDEX + OFFSET);
@@ -120,8 +120,8 @@ void load_block(int address){
 		int offset, index, tag;
 		calculate_offset_index_tag(address, &offset, &index, &tag);
 		load_byte(address, offset, index, tag);
+        ++address;
 	}
-	++address;
 }
 
 int get_way(int offset, int index, int tag){
@@ -129,7 +129,7 @@ int get_way(int offset, int index, int tag){
 	 * -1 otherwise */
 	for (int i = 0; i < VIAS; ++i){
 		if (cache[i][index][offset].tag == tag){
-			return 1;
+			return i;
 		}
 	}
 	return -1;
@@ -142,13 +142,13 @@ void read_byte(int address){
 
 	/* read from cache */
 	if ((way = get_way(offset, index, tag)) != -1){
-		printf("%c", cache[way][index][offset].data);
+		printf("%c\n", cache[way][index][offset].data);
 	} else {
 		/* case: data is not in the cache */
 		/* update missed accesses */
 		++missed_accesses;
 		/* return requested value */
-		printf("%i", -1);
+		printf("%i\n", -1);
 		/* load block */
 		load_block(address);
 	}
@@ -163,13 +163,13 @@ void write_byte(int address, char value){
 	calculate_offset_index_tag(address, &offset, &index, &tag);
 
 	if ((way = get_way(offset, index, tag)) != -1){
-		printf("%i", 0);
+		printf("%i\n", 0);
 	} else {
 		/* case: data is not in the cache */
 		/* update missed accesses */
 		++missed_accesses;
 		/* return requested value */
-		printf("%i", -1);
+		printf("%i\n", -1);
 		/* load block */
 		load_block(address);
 		way = get_way(offset, index, tag);
@@ -181,7 +181,7 @@ void write_byte(int address, char value){
 }
 
 void get_miss_rate(){
-	printf("Miss rate: %f.", miss_rate);
+	printf("Miss rate: %f.\n", miss_rate);
 }
 
 int main(int argc, char*argv[]){
@@ -199,27 +199,27 @@ int main(int argc, char*argv[]){
 	}
 	/* read file by line */
 	char *line = NULL;
-	size_t *len = 0;
-	while ((getline(&line, len, file)) != -1){
-		char *command = "a";
-		if ((scanf(line, "%c", command)) == -1){
+	size_t len = 0;
+	while ((getline(&line, &len, file)) != -1){
+		char command;
+		if ((sscanf(line, "%c", &command)) == -1){
 			exit(EXIT_FAILURE);	
 		}
-		if (strcmp("R", command) == 0){
+		if (strcmp("R", &command) == 0){
 			int address =  0;
-			if ((scanf(line, "%c%i", command, address)) == -1){
+			if ((sscanf(line, "%c%i", &command, &address)) == -1){
 				exit(EXIT_FAILURE);
 			}
 			read_byte(address);
-		} else if (strcmp("W", command) == 0){
+		} else if (strcmp("W", &command) == 0){
 			int address = 0;
 			char char_to_write = 'a';
-			scanf(line, "%c%i,%c", command, address, char_to_write);
+			sscanf(line, "%c%i,%c", &command, &address, &char_to_write);
 			write_byte(address, char_to_write);
-		} else if (strcmp("MR", command) == 0 ) {
+		} else if (strcmp("MR", &command) == 0 ) {
 			get_miss_rate();
 		} else {
-			printf("* * * * Warning! Invalid command received! * * * *");
+			printf("* * * * Warning! Invalid command received! * * * *\n");
 		}
 	}
 	if (fclose(file) != 0){
