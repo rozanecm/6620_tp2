@@ -5,6 +5,7 @@
 #include <math.h>
 
 #define CACHE_CAPACITY 4		//in KB
+#define VIAS 2					//2WSA cache
 #define BLOCK_SIZE 32			//in bytes
 #define NUMBER_OF_SETS 64
 #define INSTRUCTION_SIZE 16		//in bits
@@ -15,17 +16,18 @@
 #define INDEX 6
 #define TAG 5
 
-#define CACHE_SIZE 32			//2^OFFSET
+#define CACHE_SIZE 64			//2^INDEX size of each way of the cache
 
 struct cache_block {
 	unsigned int tag:TAG;
 	unsigned int validity_bit:1;
 	unsigned int dirty_bit:1;
 	char data;
+	char last_accessed;
 };
 
 /* main and cache memory variables */
-struct cache_block cache[CACHE_SIZE][BLOCK_SIZE];
+struct cache_block cache[VIAS][CACHE_SIZE][BLOCK_SIZE];
 char main_memory[MAIN_MEMORY_SIZE];
 
 /* statistics variables */
@@ -37,9 +39,12 @@ void init(){
 	/* set all main memory to 0 */
 	memset(&main_memory, 0, MAIN_MEMORY_SIZE);
 	/* set all cache blocks as invalid */
-	for (int i = 0; i < CACHE_SIZE; ++i){
-		for (int j = 0; j < BLOCK_SIZE; ++j){
-			cache[i][j].validity_bit = 0;
+	for (int i = 0; i < VIAS; ++i){
+		for (int j = 0; j < CACHE_SIZE; ++j){
+			for (int k = 0; k < BLOCK_SIZE; ++k){
+				cache[i][j][k].validity_bit = 0;
+				cache[i][j][k].last_accessed = 'n';
+			}
 		}
 	}
 	/* set miss rate to 0 */
@@ -48,49 +53,111 @@ void init(){
 
 void calculate_offset_index_tag(int address, int *offset, int *index, int *tag){
 	/* offset */
-	*offset = (int)pow(2, OFFSET) & address;
+	*offset = address << (INSTRUCTION_SIZE - OFFSET);
+	*offset = *offset >> (INSTRUCTION_SIZE - OFFSET);
 
 	/* index */
-	*index = pow(2, INDEX);
-	*index = *index << OFFSET;
+	*index = address << TAG;
+	*index = *index >> (OFFSET + TAG);
 
 	/* tag */
-	*tag = pow(2, TAG);
-	*tag = *tag << (OFFSET + INDEX);
+	*tag = address >> (INDEX + OFFSET);
+}
+
+void update_main_memory(int cache_way, int offset, int index){
+	int address = 0;
+	address += cache[cache_way][index][offset].tag;
+	address = address << (TAG);
+
+	address += index;
+	address = address << (INDEX);
+
+	address += offset;
+	
+	main_memory[address] = cache[cache_way][index][offset].data;
+}
+
+void load_byte(int address, int offset, int index, int tag){
+	//TODO refactor. Theres duplicated code in here. 
+	char written = 'n';
+	for (int i = 0; i < VIAS; ++i){
+		if (cache[i][index][].validity_bit == 0){
+			/* if there is no valid data here... */
+			cache[i][index][offset].tag = tag;
+			cache[i][index][offset].validity_bit = 1;
+			/* dirty bit is 0 because data has just been read from memory, 
+			 * so data in cache and in memory is the same */
+			cache[i][index][offset].dirty_bit = 0;
+			cache[i][index][offset].data = main_memory[address];
+			cache[i][index][offset].last_accessed = 'y';
+			written = 'y';
+			break;
+		}
+	}
+	if (written == 'n'){
+		for (int i = 0; i < VIAS; ++i){
+			if (cache[i][index][offset].last_accessed == 'n'){
+				/* if this data hasnt been last accessed... */
+				/* check for previous data and save to memory */
+				if (cache[i][index][offset].dirty_bit == 1){
+					/* we have to update main memory */
+					update_main_memory(i, offset, index);
+				}
+				cache[i][index][offset].tag = tag;
+				cache[i][index][offset].validity_bit = 1;
+				/* dirty bit is 0 because data has just been read from memory, 
+				 * so data in cache and in memory is the same */
+				cache[i][index][offset].dirty_bit = 0;
+				cache[i][index][offset].data = main_memory[address];
+				cache[i][index][offset].last_accessed = 'y';
+				break;
+			}
+		}
+	}
+
+}
+
+void load_block(int address){
+	address = address >> 5;
+	for (int i = 0; i < BLOCK_SIZE; ++i){
+		int offset, index, tag;
+		calculate_offset_index_tag(address, &offset, &index, &tag);
+		load_byte(address, offset, index, tag);
+	}
+	++address;
 }
 
 void read_byte(int address){
 	/* calculate offset, index, tag */
-	int offset, set_index, tag;
-	calculate_offset_index_tag(address, &offset, &set_index, &tag);
+	int offset, index, tag;
+	calculate_offset_index_tag(address, &offset, &index, &tag);
 
 	/* read from cache */
-	if (cache[offset][set_index].tag != tag){
+	char found = 'n';
+	for (int i = 0; i < VIAS; ++i){
+		if (cache[i][index][offset].tag == tag){
+			printf("%c", cache[i][index][offset].data);
+			found = 'y';
+		}
+	}
+	if (found == 'n'){
 		/* case: data is not in the cache */
-		/* */
+		/* update missed accesses */
 		++missed_accesses;
 		/* return requested value */
 		printf("%i", -1);
 		/* load block */
-		cache[offset][set_index].tag = tag;
-		cache[offset][set_index].validity_bit = 1;
-		/* dirty bit is 0 because data has just been read from memory, 
-		 * so data in cache and in memory is the same */
-		cache[offset][set_index].dirty_bit = 0;
-		cache[offset][set_index].data = main_memory[address];
-	} else {
-		printf("%c", cache[offset][set_index].data);
+		load_block(address);
 	}
 	/* adjsut miss rate */
 	++total_accesses;
+	miss_rate = missed_accesses/total_accesses;
 }
 
 void write_byte(int address, char value){
 	/* calculate offset, index, tag */
-	int offset, set_index, tag;
-	calculate_offset_index_tag(address, &offset, &set_index, &tag);
-
-	
+	int offset, index, tag;
+	calculate_offset_index_tag(address, &offset, &index, &tag);
 }
 
 void get_miss_rate(){
