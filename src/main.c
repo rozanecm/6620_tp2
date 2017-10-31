@@ -202,27 +202,28 @@ int main(int argc, char*argv[]){
 	char *line = NULL;
 	size_t len = 0;
 	while ((getline(&line, &len, file)) != -1){
-		char command;
-		if ((sscanf(line, "%c", &command)) == -1){
+		char *command;
+		if ((sscanf(line, "%s", command)) == -1){
 			exit(EXIT_FAILURE);	
 		}
-		if (strcmp("R", &command) == 0){
+		if (strcmp("R", command) == 0){
 			int address =  0;
-			if ((sscanf(line, "%c%i", &command, &address)) == -1){
+			if ((sscanf(line, "%c%i", command, &address)) == -1){
 				exit(EXIT_FAILURE);
 			}
 			read_byte(address);
-		} else if (strcmp("W", &command) == 0){
+		} else if (strcmp("W", command) == 0){
 			int address = 0;
 			char char_to_write = 'a';
-			sscanf(line, "%c%i,%c", &command, &address, &char_to_write);
+			sscanf(line, "%c%i,%c", command, &address, &char_to_write);
 			write_byte(address, char_to_write);
-		} else if (strcmp("MR", &command) == 0 ) {
+		} else if (strcmp("MR", command) == 0 ) {
 			get_miss_rate();
 		} else {
 			printf("* * * * Warning! Invalid command received! * * * *\n");
 		}
 	}
+    free(line);
 	if (fclose(file) != 0){
 		exit(EXIT_FAILURE);
 	}
