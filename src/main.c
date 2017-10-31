@@ -116,6 +116,7 @@ void load_byte(int address, int offset, int index, int tag){
 
 void load_block(int address){
 	address = address >> 5;
+	address = address << 5;
 	for (int i = 0; i < BLOCK_SIZE; ++i){
 		int offset, index, tag;
 		calculate_offset_index_tag(address, &offset, &index, &tag);
