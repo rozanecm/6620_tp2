@@ -53,12 +53,12 @@ void init(){
 
 void calculate_offset_index_tag(int address, int *offset, int *index, int *tag){
 	/* offset */
-	*offset = address << (sizeof(address) - OFFSET);
-	*offset = *offset >> (sizeof(address) - OFFSET);
+	*offset = address << (sizeof(address) * 8 - OFFSET);
+	*offset = *offset >> (sizeof(address) * 8 - OFFSET);
 
 	/* index */
-	*index = address << (sizeof(address) - INSTRUCTION_SIZE);
-	*index = *index >> (sizeof(address) - INSTRUCTION_SIZE + OFFSET + TAG);
+	*index = address << (sizeof(address) * 8 - INSTRUCTION_SIZE);
+	*index = *index >> (sizeof(address) * 8- INSTRUCTION_SIZE + OFFSET + TAG);
 
 	/* tag */
 	*tag = address >> (INDEX + OFFSET);
@@ -77,6 +77,14 @@ void update_main_memory(int cache_way, int offset, int index){
 	main_memory[address] = cache[cache_way][index][offset].data;
 }
 
+void mark_other_ways_as_not_last_accessed(int way, int index, int offset){
+	for (int i = 0; i < VIAS; ++i){
+		if (i != way){
+			cache[i][index][offset].last_accessed = 'n';
+		}
+	}
+}
+
 void write_in_cache(char data_to_write, int way, int index, int offset, int tag){
 	cache[way][index][offset].tag = tag;
 	cache[way][index][offset].validity_bit = 1;
@@ -85,10 +93,10 @@ void write_in_cache(char data_to_write, int way, int index, int offset, int tag)
 	cache[way][index][offset].dirty_bit = 0;
 	cache[way][index][offset].data = data_to_write;
 	cache[way][index][offset].last_accessed = 'y';
+	mark_other_ways_as_not_last_accessed(way, index, offset);
 }
 
 void load_byte(int address, int offset, int index, int tag){
-	//TODO refactor. Theres duplicated code in here. 
 	char written = 'n';
 	for (int i = 0; i < VIAS; ++i){
 		if (cache[i][index][offset].validity_bit == 0){
