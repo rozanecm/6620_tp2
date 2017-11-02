@@ -19,9 +19,9 @@
 #define CACHE_SIZE 64			//2^INDEX size of each way of the cache
 
 struct cache_block {
-	unsigned int tag:TAG;
-	unsigned int validity_bit:1;
-	unsigned int dirty_bit:1;
+	unsigned int tag:TAG;			/* use TAG bits for the tag */
+	unsigned int validity_bit:1;	/* use 1 bit for the validity bit */
+	unsigned int dirty_bit:1;		/* use 1 bit for the dirty bit */
 	char data;
 	char last_accessed;
 };
