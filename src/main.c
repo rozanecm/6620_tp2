@@ -151,7 +151,7 @@ void read_byte(int address){
 
 	/* read from cache */
 	if ((way = get_way(offset, index, tag)) != -1){
-		printf("%c\n", cache[way][index][offset].data);
+		printf("%i\n", cache[way][index][offset].data);
 	} else {
 		/* case: data is not in the cache */
 		/* update missed accesses */
